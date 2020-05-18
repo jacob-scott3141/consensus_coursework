@@ -1,18 +1,31 @@
 package com.company;
 
+import com.sun.xml.internal.ws.wsdl.writer.document.Part;
+
 import java.io.PrintWriter;
 import java.net.Socket;
 
-class TCPSender{
-    public static void main(String [] args){
+public class Participant{
+    PrintWriter out;
+    Socket socket;
+    ParticipantLogger log;
+    public static void main(String[] args) throws InterruptedException {
+        Participant p = new Participant();
+        p.sendMessage("why");
+    }
+    public Participant(){
         try{
-            Socket socket = new Socket("koestler.ecs.soton.ac.uk",4322);
-            PrintWriter out = new PrintWriter(socket.getOutputStream());
-            for(int i=0;i<10;i++){
-                out.println("TCP message "+i); out.flush();
-                System.out.println("TCP message "+i+" sent");
-                Thread.sleep(1000);
-            }
+            socket = new Socket("localhost",4322);
+            out = new PrintWriter(socket.getOutputStream());
+            ParticipantLogger.initLogger(4322,0,10);
+            log = ParticipantLogger.getLogger();
         }catch(Exception e){System.out.println("error"+e);}
+    }
+
+    public void sendMessage(String msg) throws InterruptedException {
+        out.println("TCP message "+ msg); out.flush();
+        System.out.println("TCP message "+ msg +" sent");
+        log.logMessage(msg);
+        Thread.sleep(1000);
     }
 }
