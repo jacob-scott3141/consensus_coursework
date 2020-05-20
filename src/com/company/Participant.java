@@ -24,7 +24,6 @@ public class Participant{
         this.timeOut = timeOut;
         try{
             socket = new Socket("localhost",serverPort);
-            server = new ServerSocket(port);
 
             out = new PrintWriter(socket.getOutputStream());
             ParticipantLogger.initLogger(serverPort, port, timeOut);
@@ -35,7 +34,7 @@ public class Participant{
     }
 
     public static void main(String[] args){
-        Participant p = new Participant(Integer.parseInt(args[2]), Integer.parseInt(args[1]), Integer.parseInt(args[3]));
+        Participant p = new Participant(Integer.parseInt(args[2]), Integer.parseInt(args[0]), Integer.parseInt(args[3]));
         p.accept();
     }
 
@@ -45,8 +44,7 @@ public class Participant{
 
     public void accept(){
         try{
-            server.accept();
-            ServerSocket ss = new ServerSocket(4322);
+            ServerSocket ss = new ServerSocket(port);
             for(;;) {
                 try {
                     Socket client = ss.accept();
@@ -59,8 +57,8 @@ public class Participant{
                 }
                 catch(Exception e){}
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            System.out.println(e);
         }
     }
 
