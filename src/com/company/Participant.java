@@ -55,7 +55,7 @@ public class Participant{
                         System.out.println(line + " received");
                     client.close();
                 }
-                catch(Exception e){}
+                catch(Exception e){System.out.println(e);}
             }
         } catch (Exception e) {
             System.out.println(e);
@@ -67,5 +67,19 @@ public class Participant{
         System.out.println(msg);
         log.logMessage(msg);
         //Thread.sleep(1000);
+    }
+
+    static class ServiceThread implements Runnable{
+        Socket client;
+        ServiceThread(Socket c){client=c;}
+
+        public void run(){try{
+            BufferedReader in = new BufferedReader(
+                    new InputStreamReader(client.getInputStream()));
+            String line;
+            while((line = in.readLine()) != null)
+                System.out.println(line+" received");
+            client.close(); }catch(Exception e){}
+        }
     }
 }
