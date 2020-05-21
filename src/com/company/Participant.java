@@ -1,5 +1,6 @@
 package com.company;
 
+import com.sun.org.apache.xpath.internal.operations.Bool;
 import com.sun.xml.internal.ws.wsdl.writer.document.Part;
 
 import java.io.BufferedReader;
@@ -8,20 +9,26 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Participant{
     PrintWriter out;
-    ServerSocket server;
+    static ServerSocket server;
     Socket socket;
     ParticipantLogger log;
+    static int order = 0;
+
+    static AtomicInteger participantsFinished = new AtomicInteger(0);
+    static AtomicInteger roundNumber = new AtomicInteger(0);
 
     static Object arrayLock = new Object();
 
     static int port;
     int serverPort;
-    int timeOut;
+    static int timeOut;
 
     static Random rand = new Random();
 
@@ -33,15 +40,17 @@ public class Participant{
         this.serverPort = serverPort;
         this.port = port;
         this.timeOut = timeOut;
+
         try{
             socket = new Socket("localhost",serverPort);
+            server = new ServerSocket(port);
 
             out = new PrintWriter(socket.getOutputStream());
             ParticipantLogger.initLogger(serverPort, port, timeOut);
             log = ParticipantLogger.getLogger();
 
             this.join();
-        }catch(Exception e){System.out.println("error"+e);}
+        }catch(Exception e){e.printStackTrace();}
     }
 
     public static void main(String[] args){
@@ -51,10 +60,26 @@ public class Participant{
             synchronized (arrayLock) {
                 arrayLock.wait();
             }
+
+            for(String s : details){
+                if(Integer.parseInt(s) < port){
+                    order += 1;
+                }
+            }
+            System.out.println("order number " + order);
+            vote = new Vote(port,voteOptions.get(rand.nextInt(voteOptions.size())));
+            System.out.println(vote);
+
+            p.accept();
+            p.sendVote();
+
+            while(participantsFinished.get() < details.size()){
+
+            }
+            System.out.println(":D");
         }
         catch(InterruptedException e){e.printStackTrace();}
-        vote = new Vote(port,voteOptions.get(rand.nextInt(voteOptions.size())));
-        System.out.println(vote);
+
     }
 
     public void join() throws InterruptedException {
@@ -63,27 +88,16 @@ public class Participant{
 
     public void initialise(){
         try {
-            ServerSocket ss = new ServerSocket(port);
-            Socket client = ss.accept();
+            Socket client = server.accept();
             Thread t = new Thread(new ServerThread(client));
             t.start();
-        } catch (IOException e) {
-            e.printStackTrace();
         }
+        catch (IOException e) {e.printStackTrace();}
     }
 
     public void accept(){
-        try{
-            ServerSocket ss = new ServerSocket(port);
-            for(;;) {
-
-                Socket client = ss.accept();
-                Thread t = new Thread(new ClientThread(client));
-                t.start();
-            }
-        } catch (Exception e) {
-            System.out.println(e);
-        }
+        Thread t = new Thread(new AcceptThread());
+        t.start();
     }
 
     private void sendMessage(String msg) throws InterruptedException {
@@ -91,6 +105,35 @@ public class Participant{
         System.out.println(msg);
         log.logMessage(msg);
         //Thread.sleep(1000);
+    }
+
+    private void sendVote(){
+        try{
+            for(String s : details) {
+                Socket client = new Socket("localhost", Integer.parseInt(s));
+
+                out = new PrintWriter(client.getOutputStream());
+
+                out.println(vote); out.flush();
+                log.logMessage(vote.toString());
+            }
+        }
+        catch(Exception e){e.printStackTrace();}
+    }
+
+    static class AcceptThread implements Runnable{
+
+        @Override
+        public void run() {
+            for (int i = 0; i < details.size(); i++) {
+                try {
+                    System.out.println("Starting process " + i);
+                    Socket client = server.accept();
+                    new Thread(new ClientThread(client)).start();
+                }
+                catch (Exception e) {e.printStackTrace();}
+            }
+        }
     }
 
     static class ServerThread implements Runnable{
@@ -147,14 +190,24 @@ public class Participant{
         @Override
         public void run() {
             try {
+                client.setSoTimeout(timeOut);
                 BufferedReader in = new BufferedReader(
                         new InputStreamReader(client.getInputStream()));
                 String line;
-                while ((line = in.readLine()) != null) {
-                    System.out.println("recieved: " + line);
+                Boolean cont = true;
+                try {
+                    while ((line = in.readLine()) != null && cont) {
+
+                        System.out.println("recieved: " + line);
+                        int sender = Integer.parseInt(line.split(",")[0].substring(1));
+
+                    }
+                }
+                catch(SocketTimeoutException e){
+                    participantsFinished.incrementAndGet();
                 }
                 client.close();
-            }catch(Exception e){}
+            }catch(Exception e){e.printStackTrace();}
         }
     }
 }
