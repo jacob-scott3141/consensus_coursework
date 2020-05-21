@@ -46,16 +46,9 @@ public class Participant{
         try{
             ServerSocket ss = new ServerSocket(port);
             for(;;) {
-                try {
-                    Socket client = ss.accept();
-                    BufferedReader in = new BufferedReader(
-                            new InputStreamReader(client.getInputStream()));
-                    String line;
-                    while ((line = in.readLine()) != null)
-                        System.out.println(line + " received");
-                    client.close();
-                }
-                catch(Exception e){System.out.println(e);}
+                Socket client = ss.accept();
+                Thread t = new Thread(new ClientThread(client));
+                t.start();
             }
         } catch (Exception e) {
             System.out.println(e);
@@ -69,17 +62,21 @@ public class Participant{
         //Thread.sleep(1000);
     }
 
-    static class ServiceThread implements Runnable{
+    static class ClientThread implements Runnable{
         Socket client;
-        ServiceThread(Socket c){client=c;}
 
-        public void run(){try{
-            BufferedReader in = new BufferedReader(
-                    new InputStreamReader(client.getInputStream()));
-            String line;
-            while((line = in.readLine()) != null)
-                System.out.println(line+" received");
-            client.close(); }catch(Exception e){}
+        ClientThread(Socket client){this.client = client;}
+
+        @Override
+        public void run() {
+            try {
+                BufferedReader in = new BufferedReader(
+                        new InputStreamReader(client.getInputStream()));
+                String line;
+                while ((line = in.readLine()) != null)
+                    System.out.println(line + " received");
+                client.close();
+            }catch(Exception e){}
         }
     }
 }
