@@ -80,7 +80,7 @@ public class Coordinator{
 
     static void send(String message, int port) throws IOException {
         PrintWriter out = new PrintWriter(sockets.get(port).getOutputStream());
-        out.println("COORDINATOR: " + message); out.flush();
+        out.println(message); out.flush();
         System.out.println("TCP message " + message + " sent");
     }
 
@@ -88,7 +88,7 @@ public class Coordinator{
         for(int port : ports) {
             PrintWriter out = new PrintWriter(sockets.get(port).getOutputStream());
 
-            out.println("COORDINATOR: " + message);
+            out.println(message);
             out.flush();
             System.out.println("TCP message " + message + " sent");
         }
