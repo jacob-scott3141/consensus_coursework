@@ -7,16 +7,22 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.lang.reflect.Array;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Participant{
     PrintWriter out;
     static ServerSocket server;
+
+    Map<Integer,Socket> mapping;
+
     Socket socket;
     ParticipantLogger log;
     static int order = 0;
@@ -25,16 +31,21 @@ public class Participant{
     static AtomicInteger roundNumber = new AtomicInteger(0);
 
     static Object arrayLock = new Object();
+    static Object voteLock = new Object();
 
     static int port;
     int serverPort;
     static int timeOut;
+    static int maxVotes;
 
     static Random rand = new Random();
 
     static Vote vote;
     static ArrayList<String> details = new ArrayList<>();
     static ArrayList<String> voteOptions = new ArrayList<>();
+    static Map<Integer,String> votes = new HashMap<>();
+
+    static Boolean voting;
 
     public Participant(int port, int serverPort, int timeOut){
         this.serverPort = serverPort;
@@ -67,18 +78,42 @@ public class Participant{
                 }
             }
             System.out.println("order number " + order);
-            vote = new Vote(port,voteOptions.get(rand.nextInt(voteOptions.size())));
+            String myVote = voteOptions.get(rand.nextInt(voteOptions.size()));
+            vote = new Vote(port,myVote);
             System.out.println(vote);
 
             p.accept();
-            p.sendVote();
+            p.setupPorts();
 
-            while(participantsFinished.get() < details.size()){
+            voting = true;
+            maxVotes = details.size();
+            Map<Integer,String> oldVotes = new HashMap<>();
+            votes.put(port,myVote);
 
+            while(voting){
+
+                voting = false;
+                String send = "VOTE";
+                for(Integer i : votes.keySet()){
+                    if(!oldVotes.containsKey(i)){
+                        System.out.println("NEW VOTE FOUND: " + votes.get(i));
+                        send = send + (" " + i + " " + votes.get(i));
+                        voting = true;
+                    }
+                }
+                p.sendVote(send);
+                oldVotes = votes;
+                synchronized (voteLock) {
+                    voteLock.wait(timeOut);
+                }
             }
             System.out.println(":D");
+            for(Integer i: votes.keySet()){
+                System.out.println(i + " " + votes.get(i));
+            }
+
         }
-        catch(InterruptedException e){e.printStackTrace();}
+        catch(Exception e){e.printStackTrace();}
 
     }
 
@@ -107,15 +142,30 @@ public class Participant{
         //Thread.sleep(1000);
     }
 
-    private void sendVote(){
+    private void setupPorts(){
         try{
+            mapping = new HashMap<>();
+            for(String s : details){
+                int i = Integer.parseInt(s);
+                mapping.put(i,new Socket("localhost", i));
+            }
+        }
+        catch(Exception e){e.printStackTrace();}
+    }
+
+    private void sendVote(String voteStr){
+        try{
+            System.out.println(voteStr);
             for(String s : details) {
-                Socket client = new Socket("localhost", Integer.parseInt(s));
+                //if(port == 12346 && s!= "12347") {
+                    Socket client = mapping.get(Integer.parseInt(s));
 
-                out = new PrintWriter(client.getOutputStream());
+                    out = new PrintWriter(client.getOutputStream());
 
-                out.println(vote); out.flush();
-                log.logMessage(vote.toString());
+                    out.println(voteStr);
+                    out.flush();
+                    log.logMessage(voteStr);
+                //}
             }
         }
         catch(Exception e){e.printStackTrace();}
@@ -127,7 +177,6 @@ public class Participant{
         public void run() {
             for (int i = 0; i < details.size(); i++) {
                 try {
-                    System.out.println("Starting process " + i);
                     Socket client = server.accept();
                     new Thread(new ClientThread(client)).start();
                 }
@@ -190,7 +239,6 @@ public class Participant{
         @Override
         public void run() {
             try {
-                client.setSoTimeout(timeOut);
                 BufferedReader in = new BufferedReader(
                         new InputStreamReader(client.getInputStream()));
                 String line;
@@ -198,9 +246,24 @@ public class Participant{
                 try {
                     while ((line = in.readLine()) != null && cont) {
 
-                        System.out.println("recieved: " + line);
-                        int sender = Integer.parseInt(line.split(",")[0].substring(1));
+                        String[] messages = line.split(" ");
+                        if (messages[0].equals("VOTE")) {
+                            for(int i = 1; 2*i < messages.length; i++){
+                                int sender = Integer.parseInt(messages[2*i - 1]);
+                                String voteString = messages[2*i];
+                                votes.put(sender, voteString);
+                            }
+                        }
 
+                        System.out.println("recieved: " + line);
+                        int i = participantsFinished.incrementAndGet();
+
+                        if(i == details.size()){
+                            participantsFinished.set(0);
+                            synchronized (voteLock) {
+                                voteLock.notify();
+                            }
+                        }
                     }
                 }
                 catch(SocketTimeoutException e){
