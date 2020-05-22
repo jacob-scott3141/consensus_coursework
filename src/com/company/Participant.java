@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Participant{
@@ -37,13 +39,15 @@ public class Participant{
     int serverPort;
     static int timeOut;
     static int maxVotes;
+    static int round;
+    static Boolean crashed = false;
 
     static Random rand = new Random();
 
     static Vote vote;
     static ArrayList<String> details = new ArrayList<>();
     static ArrayList<String> voteOptions = new ArrayList<>();
-    static Map<Integer,String> votes = new HashMap<>();
+    static ConcurrentMap<Integer,String> votes = new ConcurrentHashMap<>();
 
     static Boolean voting;
 
@@ -72,12 +76,6 @@ public class Participant{
                 arrayLock.wait();
             }
 
-            for(String s : details){
-                if(Integer.parseInt(s) < port){
-                    order += 1;
-                }
-            }
-            System.out.println("order number " + order);
             String myVote = voteOptions.get(rand.nextInt(voteOptions.size()));
             vote = new Vote(port,myVote);
             System.out.println(vote);
@@ -89,28 +87,36 @@ public class Participant{
             maxVotes = details.size();
             Map<Integer,String> oldVotes = new HashMap<>();
             votes.put(port,myVote);
+            round = 0;
 
-            while(voting){
+            while(voting && !crashed){
 
                 voting = false;
                 String send = "VOTE";
                 for(Integer i : votes.keySet()){
                     if(!oldVotes.containsKey(i)){
-                        System.out.println("NEW VOTE FOUND: " + votes.get(i));
+                        System.out.println("NEW VOTE FOUND: " + i + " " + votes.get(i));
                         send = send + (" " + i + " " + votes.get(i));
                         voting = true;
                     }
                 }
                 p.sendVote(send);
-                oldVotes = votes;
+                oldVotes.clear();
+                for(Integer i : votes.keySet()){
+                    oldVotes.put(i, votes.get(i));
+                }
                 synchronized (voteLock) {
                     voteLock.wait(timeOut);
                 }
+                System.out.println("\n");
+                round++;
             }
             System.out.println(":D");
+
             for(Integer i: votes.keySet()){
                 System.out.println(i + " " + votes.get(i));
             }
+            return;
 
         }
         catch(Exception e){e.printStackTrace();}
@@ -154,21 +160,28 @@ public class Participant{
     }
 
     private void sendVote(String voteStr){
-        try{
-            System.out.println(voteStr);
-            for(String s : details) {
-                //if(port == 12346 && s!= "12347") {
+        if(crashed){return;}
+        else {
+            try {
+
+
+                for (String s : details) {
                     Socket client = mapping.get(Integer.parseInt(s));
 
                     out = new PrintWriter(client.getOutputStream());
-
+                    System.out.println("sending " + voteStr + " to " + s);
                     out.println(voteStr);
                     out.flush();
                     log.logMessage(voteStr);
-                //}
+                    if(port==12346){
+                        crashed = true;
+                        return;
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
-        catch(Exception e){e.printStackTrace();}
     }
 
     static class AcceptThread implements Runnable{
@@ -209,13 +222,11 @@ public class Participant{
                             for(int i = 1; i < messages.length; i++){
                                 temp1.add(messages[i]);
                             }
-                            System.out.println("details recieved");
                         }
                         if (messages[0].equals("VOTE_OPTIONS")) {
                             for(int i = 1; i < messages.length; i++){
                                 temp2.add(messages[i]);
                             }
-                            System.out.println("vote options recieved");
                             exit = true;
                         }
 
@@ -229,6 +240,10 @@ public class Participant{
                 }
             }catch(Exception e){e.printStackTrace();}
         }
+    }
+
+    private static synchronized void update(int sender, String voteString){
+        votes.put(sender, voteString);
     }
 
     static class ClientThread implements Runnable{
@@ -251,7 +266,7 @@ public class Participant{
                             for(int i = 1; 2*i < messages.length; i++){
                                 int sender = Integer.parseInt(messages[2*i - 1]);
                                 String voteString = messages[2*i];
-                                votes.put(sender, voteString);
+                                update(sender, voteString);
                             }
                         }
 
