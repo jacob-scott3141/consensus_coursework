@@ -176,6 +176,12 @@ public class Participant{
                     out.flush();
                     log.logMessage(voteStr);
                     if (port == 12349) {
+                        System.err.println("CRASHING");
+                        crashed = true;
+                        return;
+                    }
+                    if (port == 12348 && round > 0) {
+                        System.err.println("CRASHING");
                         crashed = true;
                         return;
                     }
