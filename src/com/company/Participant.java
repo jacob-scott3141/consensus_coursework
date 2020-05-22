@@ -89,7 +89,7 @@ public class Participant{
             votes.put(port,myVote);
             round = 0;
 
-            while(voting && !crashed){
+            while(voting){
 
                 voting = false;
                 String send = "VOTE";
@@ -110,13 +110,16 @@ public class Participant{
                 }
                 System.out.println("\n");
                 round++;
+                if(crashed){
+                    System.err.println("oops i crashed");
+                    return;
+                }
             }
             System.out.println(":D");
 
             for(Integer i: votes.keySet()){
                 System.out.println(i + " " + votes.get(i));
             }
-            return;
 
         }
         catch(Exception e){e.printStackTrace();}
@@ -160,20 +163,19 @@ public class Participant{
     }
 
     private void sendVote(String voteStr){
-        if(crashed){return;}
-        else {
+        if(!crashed) {
             try {
-
+                System.out.println(voteStr);
 
                 for (String s : details) {
                     Socket client = mapping.get(Integer.parseInt(s));
 
                     out = new PrintWriter(client.getOutputStream());
-                    System.out.println("sending " + voteStr + " to " + s);
+
                     out.println(voteStr);
                     out.flush();
                     log.logMessage(voteStr);
-                    if(port==12346){
+                    if (port == 12349) {
                         crashed = true;
                         return;
                     }
